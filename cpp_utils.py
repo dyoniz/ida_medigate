@@ -5,28 +5,14 @@ import ida_bytes
 import ida_hexrays
 import ida_name
 import ida_struct
-import ida_typeinf
 import ida_xref
-import idautils
 import idc
 import idaapi
 from idaapi import BADADDR
+
 from . import utils
-from .utils import batchmode
 
 log = logging.getLogger("ida_medigate")
-
-
-""" 
-IDA7.0 Bugs
-
-ida_struct.get_member_by_id()  @return: tuple(mptr, member_fullname, sptr)
-    IDA7.0:
-        sptr points to some wrong struct. Attempts to access this struct lead to IDA crash
-    In IDA7.5 SP3:
-        sptr points to a proper struct
-
-"""
 
 
 VTABLE_KEYWORD = "vtbl"
@@ -332,81 +318,6 @@ def add_class_vtable(struct_ptr, vtable_name, offset=BADADDR, vtable_field_name=
         )
     else:
         ida_xref.add_dref(new_member.id, vtable_id, ida_xref.XREF_USER | ida_xref.dr_O)
-
-
-@batchmode
-def post_func_name_change(new_name, ea):
-    xrefs = idautils.XrefsTo(ea, ida_xref.XREF_USER)
-    xrefs = [xref for xref in xrefs if xref.type == ida_xref.dr_I and xref.user == 1]
-    args_list = []
-    for xref in xrefs:
-        res = ida_struct.get_member_by_id(xref.frm)
-        if not res or not res[0]:
-            log.warning("Xref from %08X wasn't struct_member", xref.frm)
-            continue
-        # In IDA7.0 get_member_by_id() returns incorrect struct, which,
-        # when accessed, causes IDA to crash.
-        # In IDA7.5 SP3 get_member_by_id() returns correct struct.
-        # So it looks like an IDA bug.
-        # To avoid crashes, we get struct from the member's full name.
-        # This approach works both in IDA7.0 and IDA7.5 SP3
-        member = res[0]
-        struct = ida_struct.get_member_struc(ida_struct.get_member_fullname(member.id))
-        assert struct
-        args_list.append([struct, member.get_soff(), new_name])
-
-    return utils.set_member_name, args_list
-
-
-def post_struct_member_name_change(member, new_name):
-    xrefs = idautils.XrefsFrom(member.id)
-    xrefs = [xref for xref in xrefs if xref.type == ida_xref.dr_I and xref.user == 1]
-    for xref in xrefs:
-        if utils.is_func_start(xref.to):
-            utils.set_func_name(xref.to, new_name)
-
-
-def post_struct_member_type_change(member):
-    xrefs = idautils.XrefsFrom(member.id)
-    xrefs = [xref for xref in xrefs if xref.type == ida_xref.dr_I and xref.user == 1]
-    for xref in xrefs:
-        if utils.is_func_start(xref.to):
-            member_tinfo = idaapi.tinfo_t()
-            ida_struct.get_member_tinfo(member_tinfo, member)
-            if member_tinfo.is_funcptr():
-                function_tinfo = member_tinfo.get_pointed_object()
-                if function_tinfo:
-                    if not ida_typeinf.apply_tinfo(xref.to, function_tinfo, idaapi.TINFO_DEFINITE):
-                        log.warn(
-                            "Failed to apply tinfo %s -> %s",
-                            ida_struct.get_member_fullname(member.id),
-                            idc.get_name(xref.to),
-                        )
-
-
-@batchmode
-def post_func_type_change(funcea):
-    xrefs = idautils.XrefsTo(funcea, ida_xref.XREF_USER)
-    xrefs = [xref for xref in xrefs if xref.type == ida_xref.dr_I and xref.user == 1]
-    args_list = []
-    if not xrefs:
-        return None, []
-    try:
-        xfunc = ida_hexrays.decompile(funcea)
-        func_ptr_typeinf = utils.get_typeinf_ptr(xfunc.type)
-        for xref in xrefs:
-            res = ida_struct.get_member_by_id(xref.frm)
-            if not res or not res[0]:
-                log.warning("Can't get struct for member %X", member.id)
-                continue
-            member = res[0]
-            struct = ida_struct.get_member_struc(ida_struct.get_member_fullname(member.id))
-            assert struct
-            args_list.append([struct, member, 0, func_ptr_typeinf, idaapi.TINFO_DEFINITE])
-    except ida_hexrays.DecompilationFailure:
-        # TODO: get func type even if decompilation fails
-        pass
-    return ida_struct.set_member_tinfo, args_list
 
 
 def make_funcptr_pt(func, this_type):

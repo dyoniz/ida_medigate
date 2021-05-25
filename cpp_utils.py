@@ -173,7 +173,7 @@ def get_interface_empty_vtable_name():
 
 def install_vtables_union(class_name, class_vtable_member=None, vtable_member_tinfo=None, offset=0):
     # pylint: disable=too-many-locals
-    # TODO: refactor
+    # TODO: this function is too big and must be refactored
     log.debug(
         "install_vtables_union(%s, %s, %s)",
         class_name,
@@ -190,11 +190,13 @@ def install_vtables_union(class_name, class_vtable_member=None, vtable_member_ti
     if old_vtable_sptr and not ida_struct.set_struc_name(
         old_vtable_sptr.id, old_vtable_class_name + "_orig"
     ):
+        # FIXME: why log exception?
         log.exception(
             "Failed changing %s->%s_orig",
             old_vtable_class_name,
             old_vtable_class_name,
         )
+        # FIXME: why -1 and not None?
         return -1
     vtables_union_id = utils.get_or_create_struct_id(vtables_union_name, True)
     vtable_member_tinfo = utils.get_typeinf(old_vtable_class_name + "_orig")
@@ -204,11 +206,13 @@ def install_vtables_union(class_name, class_vtable_member=None, vtable_member_ti
             class_name,
             vtables_union_name,
         )
+        # FIXME: why -1 and not None?
         return -1
 
     vtables_union = ida_struct.get_struc(vtables_union_id)
     if not vtables_union:
         log.exception("Could retrieve vtables union for %s", class_name)
+        # FIXME: return -1?
     if vtable_member_tinfo is not None:
         vtables_union_vtable_field_name = get_class_vtables_field_name(class_name)
     else:
@@ -223,6 +227,7 @@ def install_vtables_union(class_name, class_vtable_member=None, vtable_member_ti
     if class_vtable_member:
         member_ptr = class_vtable_member
     else:
+        # FIXME: add_struc_member returns error code, not member id
         member_id = ida_struct.add_struc_member(
             parent_struct,
             get_class_vtable_field_name(class_name),
@@ -231,6 +236,7 @@ def install_vtables_union(class_name, class_vtable_member=None, vtable_member_ti
             mt,
             struct_size,
         )
+        # FIXME: get_member_by_id returns tuple, not member ptr
         member_ptr = ida_struct.get_member_by_id(member_id)
     ida_struct.set_member_tinfo(
         parent_struct,
@@ -239,6 +245,7 @@ def install_vtables_union(class_name, class_vtable_member=None, vtable_member_ti
         vtables_union_ptr_type,
         idaapi.TINFO_DEFINITE,
     )
+    # FIXME: might be None! Is this OK, considering we return -1 everywhere else?
     return vtables_union
 
 
@@ -364,12 +371,17 @@ def post_struct_member_type_change(member):
     xrefs = [xref for xref in xrefs if xref.type == ida_xref.dr_I and xref.user == 1]
     for xref in xrefs:
         if utils.is_func_start(xref.to):
-            function_ptr_tinfo = idaapi.tinfo_t()
-            ida_struct.get_member_tinfo(function_ptr_tinfo, member)
-            if function_ptr_tinfo.is_funcptr():
-                function_tinfo = function_ptr_tinfo.get_pointed_object()
-                if function_tinfo is not None:
-                    ida_typeinf.apply_tinfo(xref.to, function_tinfo, idaapi.TINFO_DEFINITE)
+            member_tinfo = idaapi.tinfo_t()
+            ida_struct.get_member_tinfo(member_tinfo, member)
+            if member_tinfo.is_funcptr():
+                function_tinfo = member_tinfo.get_pointed_object()
+                if function_tinfo:
+                    if not ida_typeinf.apply_tinfo(xref.to, function_tinfo, idaapi.TINFO_DEFINITE):
+                        log.warn(
+                            "Failed to apply tinfo %s -> %s",
+                            ida_struct.get_member_fullname(member.id),
+                            idc.get_name(xref.to),
+                        )
 
 
 @batchmode

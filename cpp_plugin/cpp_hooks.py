@@ -177,6 +177,90 @@ def post_func_type_change(funcea):
     return ida_struct.set_member_tinfo, args_list
 
 
+def rename_struct_member(mid, new_name):
+    if ida_struct.get_member_name(mid) == new_name:
+        return
+    mptr = utils.get_mptr_by_id(mid)
+    if not mptr or ida_struct.is_special_member(mptr.id):
+        # special member with the name beginning with ' '?
+        return
+    sptr = utils.get_sptr_by_member_id(mptr.id)
+    if not sptr or sptr.is_frame():
+        # member is the arg field in function frame
+        return
+    if not ida_struct.set_member_name(sptr, mptr.get_soff(), new_name):
+        log.warn(
+            "Couldn't rename struct member %08X from '%s' to '%s'",
+            mptr.id,
+            ida_struct.get_member_name(mptr.id),
+            new_name,
+        )
+
+
+@batchmode
+def rename_linked_members(funcea, new_name):
+    for xref in idautils.XrefsTo(funcea, ida_xref.XREF_USER):
+        if xref.user and xref.type == ida_xref.dr_I:
+            if not ida_struct.is_member_id(xref.frm):
+                continue
+            if ida_struct.get_member_name(xref.frm) == new_name:
+                continue
+            rename_struct_member(xref.frm, new_name)
+
+
+def rename_func(funcea, new_name):
+    if idc.get_name(funcea) == new_name:
+        return
+    if not idc.set_name(funcea, new_name):
+        log.warn(
+            "Couldn't rename func at %08X from '%s' to '%s'",
+            funcea,
+            idc.get_name(funcea),
+            new_name,
+        )
+
+
+def rename_linked_funcs(mid, new_name):
+    # there should be only one such func
+    # maybe we should put assertion for that
+    for xref in idautils.XrefsFrom(mid, ida_xref.XREF_USER):
+        if xref.user and xref.type == ida_xref.dr_I:
+            if not utils.is_func_start(xref.to):
+                continue
+            if idc.get_name(xref.to) == new_name:
+                continue
+            rename_func(xref.to, new_name)
+
+
+class CPPHooks2(ida_idp.IDB_Hooks):
+    def __init__(self, is_decompiler_on):
+        self.is_decompiler_on = is_decompiler_on
+
+    def struc_member_renamed(self, sptr, mptr):
+        if sptr.is_frame():
+            # function argument was renamed, not interested
+            return 0
+        new_name = ida_struct.get_member_name(mptr.id)
+        rename_linked_funcs(mptr.id, new_name)
+        return 0
+
+    def func_renamed(self, funcea, new_name):
+        self.unhook()
+        try:
+            rename_linked_members(funcea, new_name)
+        finally:
+            self.hook()
+
+    def renamed(self, ea, new_name, local_name):
+        # This event happens when anything is renamed,
+        # including struct members and function arguments.
+        # Here we only interested if function was renamed.
+        # And for struct members we have separate event handler.
+        if utils.is_func_start(ea):
+            self.func_renamed(ea, new_name)
+        return 0
+
+
 class CPPHooks(ida_idp.IDB_Hooks):
     def __init__(self, is_decompiler_on):
         super(CPPHooks, self).__init__()

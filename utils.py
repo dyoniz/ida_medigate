@@ -85,6 +85,18 @@ def is_func_start(ea):
     return func is not None and func.start_ea == ea
 
 
+def is_func(ea):
+    func = ida_funcs.get_func(ea)
+    return func is not None
+
+
+def get_func_start(ea):
+    func = ida_funcs.get_func(ea)
+    if not func:
+        return BADADDR
+    return func.start_ea
+
+
 def get_funcs_list():
     raise Exception("Not implemented")
 
@@ -288,6 +300,20 @@ def get_member_tinfo(member):
         log.warn("Couldn't get member type info")
         return None
     return member_typeinf
+
+
+def get_mptr_by_id(mid):
+    res = ida_struct.get_member_by_id(mid)
+    if not res:
+        return None
+    return res[0]
+
+
+def get_sptr_by_member_id(mid):
+    mptr = get_mptr_by_id(mid)
+    if not mptr:
+        return None
+    return ida_struct.get_member_struc(ida_struct.get_member_fullname(mptr.id))
 
 
 def get_sptr_by_name(struct_name):

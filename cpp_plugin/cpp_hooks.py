@@ -16,57 +16,89 @@ from utils import batchmode
 log = logging.getLogger("ida_medigate")
 
 
-"""
-IDA7.0 bugs
+""" IDA7.0 API bugs
 
 ida_struct.get_member_by_id()  @return: tuple(mptr, member_fullname, sptr)
     IDA7.0:
         sptr points to some wrong struct. Attempts to access this struct lead to IDA crash
     In IDA7.5 SP3:
         sptr points to a proper struct
+"""
 
-IDB_Hooks
-    Function renamed:
-        IDA7.0:
-            renamed
-        IDA7.5 SP3:
-            renamed
+""" IDB_Hooks events order in IDA7.0 and IDA7.5 SP3
 
-    Function type changed (Y on the whole function):
-        IDA7.0:
-            ti_changed
-            func_udpated
-            for each arg in function frame:
-                renaming_struc_member
-                renamed
-        IDA7.5 SP3:
-            (the same)
+Struct member renamed:
+    IDA7.0 and IDA7.5:
+        renaming_struc_member
+            - happens even when name is duplicate
+            - doesn't happen if name has incorrect symbols)
+            - get_member_name(mptr.id) returns OLD member name
+            - new_name contains NEW name
+        renamed (struct member)
+            - happens only if struct member was successfully renamed
+            - get_member_name(ea) returns NEW member name
 
-    Function arg renamed or type changed (Y on the function arg):
-        IDA7.0:
-            ti_changed (function)
-            func_udpated
-        IDA7.5 SP3:
-            (the same)
-            + sometimes (unpredictable) there might also be the following events:
-                ti_changed (arg)
-                renaming_struc_member (arg)
-                renamed (arg)
+Struct member type changed:
+    IDA7.0:
+        struct_member_changed
+            - happens before ti_changed
+            - get_tinfo(mptr.id) returns OLD member type! (IDA7.0 bug)
+        ti_changed (struct member)
+            - happens after struct_member_changed
+            - get_tinfo(ea) returns NEW member type
+    IDA7.5 SP3:
+        ti_changed (struct member)
+            - happens before struct_member_changed
+            - get_tinfo(ea) returns NEW member type
+        struct_member_changed
+            - happens after ti_changed
+            - get_tinfo(mptr.id) returns NEW member type
 
-    Structure member renamed:
-        IDA7.0:
-            renaming_struc_member
-            renamed (only happens if name was successfully set)
-        IDA7.5 SP3:
-            (the same)
+Function renamed (N on the function):
+    IDA7.0 and IDA7.5:
+        renamed (func)
+            - happens after function was successfully renamed
 
-    Structure member type changed:
-        IDA7.0:
-            struct_member_changed (member tinfo = OLD type!) (seems like a bug in IDA7.0)
-            ti_changed (member tinfo = NEW type)
-        IDA7.5 SP3:
-            ti_changed (member tinfo = NEW type)
-            struct_member_changed (member tinfo = NEW type)
+Function type changed (Y on the function):
+    IDA7.0 and IDA7.5:
+        ti_changed (func)
+            - get_tinfo(ea) returns NEW func type
+        func_udpated
+        [if function has frame args that are linked to function definition, then for each such frame member]:
+            [renaming_struc_member (function frame member)]
+            [renamed (function frame member)]
+
+Function arg type changed in decompiler (Y on the function arg):
+    IDA7.0:
+        ti_changed (func)
+            - get_tinfo(ea) retuns NEW func type
+        struct_member_changed (arg)
+            - get_tinfo(mptr.id) returns OLD arg type! (IDA7.0 bug)
+        ti_changed (arg)
+            - get_tinfo(mptr.id) returns NEW arg type
+        [maybe bunch of renamed with empty new_name]
+        func_udpated
+    IDA7.5
+        ti_changed (func)
+            - get_tinfo(ea) returns NEW func type
+        ti_changed (arg)
+            - get_tinfo(mptr.id) returns NEW arg type
+        struct_member_changed:
+            - get_tinfo(mptr.id) returns NEW arg type
+        [maybe bunch of renamed with empty new_name]
+        func_updated
+
+Function arg renamed in decompiler (N on the function arg):
+    IDA7.0 and IDA7.5:
+        renaming_struc_member (arg)
+            - new_name contains NEW arg name
+            - get_member_name(mptr.id) returns OLD arg name
+        renamed (arg)
+            - happens only if arg was successfully renamed
+            - new_name contains NEW arg name
+            - get_member_name(mptr.id) returns NEW arg name
+        ti_changed (func)
+            - get_tinfo(ea) returns NEW func type
 """
 
 

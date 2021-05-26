@@ -21,7 +21,7 @@ class CPPPlugin(ida_idaapi.plugin_t):
     """
 
     # Mandatory definitions
-    PLUGIN_NAME = "ida_cpp"
+    PLUGIN_NAME = "ida_medigate"
     PLUGIN_VERSION = "0.0.1"
     PLUGIN_AUTHORS = "Medigate"
     TOGGLE_HOTKEY = "CTRL+ALT+SHIFT-M"

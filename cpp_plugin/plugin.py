@@ -49,7 +49,7 @@ class CPPPlugin(ida_idaapi.plugin_t):
         else:
             log.warn("Hex-Rays decompiler is not available")
 
-        self.cpp_hooks = CPPHooks(self.is_decompiler_on)
+        self.cpp_hooks = CPPHooks()
         self.gui_hooks = CPPUIHooks()
 
         if not self.hook():

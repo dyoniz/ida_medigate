@@ -139,6 +139,13 @@ def get_typeinf(typestr):
     return tif
 
 
+def deserialize_typeinf(xtype, fields):
+    tif = ida_typeinf.tinfo_t()
+    if not tif.deserialize(None, xtype, fields):
+        return None
+    return tif
+
+
 def get_typeinf_ptr(typeinf):
     if typeinf is None:
         return None
@@ -256,12 +263,12 @@ def set_func_name(func_ea, new_name):
     return idc.get_name(func_ea)
 
 
-def deref_tinfo(tinfo):
-    if not tinfo:
+def deref_tinfo(tif):
+    if not tif:
         return None
-    if not tinfo.is_ptr():
-        return None
-    return tinfo.get_pointed_object()
+    if not tif.is_ptr():
+        return tif
+    return tif.get_pointed_object()
 
 
 def is_struct_or_union(tinfo):
@@ -294,15 +301,19 @@ def extract_struct_from_tinfo(tinfo):
     return struct
 
 
-def get_member_tinfo(member):
+def get_member_tinfo(mptr):
+    if not mptr:
+        return None
     member_typeinf = idaapi.tinfo_t()
-    if not ida_struct.get_member_tinfo(member_typeinf, member):
+    if not ida_struct.get_member_tinfo(member_typeinf, mptr):
         log.warn("Couldn't get member type info")
         return None
     return member_typeinf
 
 
-def get_mptr_by_id(mid):
+def get_mptr_by_member_id(mid):
+    if mid is None or mid == BADADDR:
+        return None
     res = ida_struct.get_member_by_id(mid)
     if not res:
         return None
@@ -310,10 +321,37 @@ def get_mptr_by_id(mid):
 
 
 def get_sptr_by_member_id(mid):
-    mptr = get_mptr_by_id(mid)
+    if mid is None or mid == BADADDR:
+        return None
+    mptr = get_mptr_by_member_id(mid)
     if not mptr:
         return None
     return ida_struct.get_member_struc(ida_struct.get_member_fullname(mptr.id))
+
+
+def get_member_by_id(mid):
+    # Replacement for the ida_struct.get_member_by_id(),
+    # which in IDA7.0 returns incorrect sptr
+    res = ida_struct.get_member_by_id(mid)
+    if not res:
+        return None
+    mptr, member_fullname, _ = res
+    sptr = ida_struct.get_member_struc(ida_struct.get_member_fullname(mptr.id))
+    return mptr, member_fullname, sptr
+
+
+def print_smt_code(smt_code):
+    return {
+        ida_struct.SMT_BADARG: "bad parameters",
+        ida_struct.SMT_NOCOMPAT: "the new type is not compatible with the old type",
+        ida_struct.SMT_WORSE: "the new type is worse than the old type",
+        ida_struct.SMT_SIZE: "the new type is incompatible with the member size",
+        ida_struct.SMT_ARRAY: "arrays are forbidden as function arguments",
+        ida_struct.SMT_OVERLAP: "member would overlap with members that can not be deleted",
+        ida_struct.SMT_FAILED: "failed to set new member type",
+        ida_struct.SMT_OK: "success: changed the member type",
+        ida_struct.SMT_KEEP: "no need to change the member type, the old type is better",
+    }.get(smt_code, "unknown smt code: %d" % smt_code)
 
 
 def get_sptr_by_name(struct_name):

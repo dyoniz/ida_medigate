@@ -121,18 +121,19 @@ def has_linked_funcs(mid):
 
 
 def rename_linked_member(mid, new_name):
-    member_full_name = ida_struct.get_member_fullname(mid)
     if ida_struct.get_member_name(mid) == new_name:
         log.debug(
             "%08X %s: linked member already has name '%s'",
             mid,
-            member_full_name,
+            ida_struct.get_member_fullname(mid),
             new_name,
         )
         return
     if ida_struct.is_special_member(mid):
         # special member with the name beginning with ' '?
-        log.warn("%08X %s: linked member is a special member", mid, member_full_name)
+        log.warn(
+            "%08X %s: linked member is a special member", mid, ida_struct.get_member_fullname(mid)
+        )
         return
     sptr = utils.get_sptr_by_member_id(mid)
     if not sptr:
@@ -153,37 +154,39 @@ def rename_linked_member(mid, new_name):
         log.warn(
             "%08X %s: failed to rename linked member to '%s'",
             mid,
-            member_full_name,
+            ida_struct.get_member_fullname(mid),
             new_name,
         )
         return
-    log.debug("%08X %s: renamed linked member to '%s'", mid, member_full_name, new_name)
+    log.debug(
+        "%08X %s: renamed linked member to '%s'", mid, ida_struct.get_member_fullname(mid), new_name
+    )
 
 
 def rename_linked_func(funcea, new_name):
     # TODO: replace "__" with "::" in new_name?
-    func_name = idc.get_name(funcea)
     if idc.get_name(funcea) == new_name:
-        log.debug("%08X %s: linked func already has name '%s'", funcea, func_name, new_name)
+        log.debug(
+            "%08X %s: linked func already has name '%s'", funcea, idc.get_name(funcea), new_name
+        )
         return
     if not idc.set_name(funcea, new_name):
         log.warn(
             "%08X %s: failed to rename linked func to '%s'",
             funcea,
-            func_name,
+            idc.get_name(funcea),
             new_name,
         )
         return
-    log.debug("%08X %s: renamed linked func to '%s'", funcea, func_name, new_name)
+    log.debug("%08X %s: renamed linked func to '%s'", funcea, idc.get_name(funcea), new_name)
 
 
 def change_linked_member_type(mid, new_member_tif):
-    member_full_name = ida_struct.get_member_fullname(mid)
     if idc.get_tinfo(mid) == new_member_tif.serialize()[:-1]:
         log.debug(
             "%08X %s: linked member already has type %s",
             mid,
-            member_full_name,
+            ida_struct.get_member_fullname(mid),
             new_member_tif,
         )
         return
@@ -195,7 +198,7 @@ def change_linked_member_type(mid, new_member_tif):
         log.warn(
             "%08X %s: failed to change linked member type to %s: %s",
             mid,
-            member_full_name,
+            ida_struct.get_member_fullname(mid),
             new_member_tif,
             utils.print_smt_code(smt_code),
         )
@@ -203,25 +206,26 @@ def change_linked_member_type(mid, new_member_tif):
     log.debug(
         "%08X %s: changed linked member type to %s",
         mid,
-        member_full_name,
+        ida_struct.get_member_fullname(mid),
         new_member_tif,
     )
 
 
 def change_linked_func_type(funcea, new_func_tif):
-    func_name = idc.get_name(funcea)
     if idc.get_tinfo(funcea) == new_func_tif.serialize()[:-1]:
-        log.debug("%08X %s: linked func already has type %s", funcea, func_name, new_func_tif)
+        log.debug(
+            "%08X %s: linked func already has type %s", funcea, idc.get_name(funcea), new_func_tif
+        )
         return
     if not ida_typeinf.apply_tinfo(funcea, new_func_tif, ida_typeinf.TINFO_DEFINITE):
         log.warn(
             "%08X %s: failed to change linked func type to %s",
             funcea,
-            func_name,
+            idc.get_name(funcea),
             new_func_tif,
         )
         return
-    log.debug("%08X %s: changed linked func type to %s", funcea, func_name, new_func_tif)
+    log.debug("%08X %s: changed linked func type to %s", funcea, idc.get_name(funcea), new_func_tif)
 
 
 @batchmode
@@ -249,6 +253,7 @@ def rename_linked_funcs(mid, new_name):
 
 
 def change_linked_funcs_type(mid, new_member_tif):
+    # there should be only one such func
     assert new_member_tif.is_funcptr()
     new_func_tif = utils.deref_tinfo(new_member_tif)
     assert new_func_tif.is_func()
@@ -312,15 +317,14 @@ class CPPHooks(ida_idp.IDB_Hooks):
         assert utils.is_func_start(funcea)
         if not has_linked_members(funcea):
             return
-        func_name = idc.get_name(funcea)
         new_tif = utils.deserialize_typeinf(type, fnames)
         if not new_tif:
-            logging.warn("%08X %s: failed to deserialize func type", funcea, func_name)
+            logging.warn("%08X %s: failed to deserialize func type", funcea, idc.get_name(funcea))
             return
         log.debug(
             "%08X %s: func type changed to %s, updating linked members type",
             funcea,
-            func_name,
+            idc.get_name(funcea),
             new_tif,
         )
         self.unhook()

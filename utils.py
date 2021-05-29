@@ -199,7 +199,7 @@ def get_func_details(func_ea):
     if not ida_nalt.get_tinfo(tif):
         log.warn("%08X Couldn't get func tinfo", func_ea)
         return None
-    if not tif.get_tinfo_details(func_details):
+    if not tif.get_func_details(func_details):
         log.warn("%08X Couldn't get func type details", func_ea)
         return None
     return func_details

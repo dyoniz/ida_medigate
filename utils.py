@@ -185,12 +185,22 @@ def create_funcptr(py_type):
 
 
 def get_func_details(func_ea):
-    xfunc = ida_hexrays.decompile(func_ea)
-    if xfunc is None:
-        return None
     func_details = idaapi.func_type_data_t()
-    if not xfunc.type.get_func_details(func_details):
-        log.warning("%08X Couldn't get func type details", func_ea)
+    try:
+        xfunc = ida_hexrays.decompile(func_ea)
+        if not xfunc.type.get_func_details(func_details):
+            log.warning("%08X Couldn't get func type details", func_ea)
+            return None
+        return func_details
+    except ida_hexrays.DecompilationFailure as ex:
+        log.exception("Couldn't decompile func at %08X: %s", func_ea, ex)
+
+    tif = ida_typeinf.tinfo_t()
+    if not ida_nalt.get_tinfo(tif):
+        log.warn("%08X Couldn't get func tinfo", func_ea)
+        return None
+    if not tif.get_tinfo_details(func_details):
+        log.warn("%08X Couldn't get func type details", func_ea)
         return None
     return func_details
 

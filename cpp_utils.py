@@ -336,6 +336,8 @@ def update_vtable_struct(
     pure_virtual_name=None,
     parent_name=None,
     add_func_this=True,
+    force_rename_vtable_head=False,  # rename vtable head even if it is already named by IDA
+    # if it's not named, then it will be renamed anyway
 ):
     # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     # TODO: refactor
@@ -393,16 +395,17 @@ def update_vtable_struct(
         vtable_head = functions_ea
     ida_bytes.del_items(vtable_head, ida_bytes.DELIT_SIMPLE, vtable_size)
     ida_bytes.create_struct(vtable_head, vtable_size, vtable_struct.id)
-    if parent_name is None and this_type:
-        parent = utils.deref_struct_from_tinfo(this_type)
-        parent_name = ida_struct.get_struc_name(parent.id)
-        if parent_name == class_name:
-            parent_name = None
-    idc.set_name(
-        vtable_head,
-        get_vtable_instance_name(class_name, parent_name),
-        ida_name.SN_CHECK | ida_name.SN_FORCE,
-    )
+    if not idc.hasUserName(idc.get_full_flags(vtable_head)) or force_rename_vtable_head:
+        if parent_name is None and this_type:
+            parent = utils.deref_struct_from_tinfo(this_type)
+            parent_name = ida_struct.get_struc_name(parent.id)
+            if parent_name == class_name:
+                parent_name = None
+        idc.set_name(
+            vtable_head,
+            get_vtable_instance_name(class_name, parent_name),
+            ida_name.SN_CHECK | ida_name.SN_FORCE,
+        )
 
 
 def is_valid_func_char(c):

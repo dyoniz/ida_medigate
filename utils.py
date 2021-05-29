@@ -232,7 +232,7 @@ def update_func_details(func_ea, func_details):
     if not function_tinfo.create_func(func_details):
         log.warning("%08X Couldn't create func from details", func_ea)
         return None
-    if not ida_typeinf.apply_tinfo(func_ea, function_tinfo, idaapi.TINFO_DEFINITE):
+    if not ida_typeinf.apply_tinfo(func_ea, function_tinfo, idaapi.TINFO_GUESSED):
         log.warning("%08X Couldn't apply func tinfo", func_ea)
         return None
     return function_tinfo

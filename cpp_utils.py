@@ -286,19 +286,13 @@ def update_func_name_with_class(func_ea, class_name):
 
 
 def update_func_this(func_ea, this_type=None):
-    functype = None
-    try:
-        func_details = utils.get_func_details(func_ea)
-        if func_details is None:
-            return None
-        if this_type:
-            if func_details:
-                func_details[0].name = "this"
-                func_details[0].type = this_type
-        functype = utils.update_func_details(func_ea, func_details)
-    except ida_hexrays.DecompilationFailure as ex:
-        log.exception("Couldn't decompile func at %08X: %s", func_ea, ex)
-    return functype
+    func_details = utils.get_func_details(func_ea)
+    if func_details is None:
+        return None
+    if this_type and func_details.cc == idaapi.CM_CC_THISCALL and func_details:
+        func_details[0].name = "this"
+        func_details[0].type = this_type
+    return utils.update_func_details(func_ea, func_details)
 
 
 def add_class_vtable(struct_ptr, vtable_name, offset=BADADDR, vtable_field_name=None):
